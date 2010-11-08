@@ -1,28 +1,27 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 ##############################################################################
 #
-# Vim Script Updater 0.6
+# Vim Script Updater 1.0
 #
 # Author: David Munger
 #
 ##############################################################################
 
-import urllib2
-import sys
-import os
+import urllib.request, urllib.error, urllib.parse
+import sys, os, re, io
+import atexit
 import shutil
 import tempfile
-import re
 import gzip, bz2, tarfile, zipfile
 
-from HTMLParser import HTMLParser, HTMLParseError
+from html.parser import HTMLParser, HTMLParseError
 
 
 VIM = 'vim'
 
 
-class TempDir:
+class TempDir: # {{{1
 
     def __init__(self):
         """create a temporary directory"""
@@ -61,14 +60,14 @@ class TempDir:
         return the full path to the target path on success
         """
 
-        u = urllib2.urlopen(url)
+        u = urllib.request.urlopen(url)
         if u.info()['content-type'].startswith('text/html'):
             raise Exception('Cannot download URL: %s' % u.geturl())
 
         self.mkdir(os.path.dirname(filename))
         target = os.path.join(self.path, filename)
 
-        f = file(target, 'w')
+        f = open(target, 'wb')
         f.write(u.read())
         f.close()
 
@@ -86,6 +85,7 @@ class VimScriptHTMLParser(HTMLParser):
         self._tag_stack = []
         self._td_count = 0
         self._cur_info = None
+        self.charset = 'utf-8' # default charset
 
         self.script_info = []
         self.url = url
@@ -98,8 +98,8 @@ class VimScriptHTMLParser(HTMLParser):
             if m: self.script_id = m.group(1)
 
             # parse URL
-            for line in urllib2.urlopen(url):
-                self.feed(line)
+            for line in urllib.request.urlopen(url):
+                self.feed(line.decode(self.charset))
 
     def latest_script(self):
         return self.script_info[0]
@@ -108,7 +108,14 @@ class VimScriptHTMLParser(HTMLParser):
 
         self._tag_stack.append(tag)
 
-        if tag == 'tr':
+        if tag == 'meta':
+            attrs = {k.lower():v.lower() for k,v in attrs}
+            if attrs.get('http-equiv', '').lower() == 'content-type':
+                values = [s.strip() for s in attrs.get('content', '').split(';')]
+                for v in values:
+                    if v.startswith('charset='):
+                        self.charset = v.split('=', 1)[1]
+        elif tag == 'tr':
             self._td_count = 0
 
         elif tag == 'a' and self._tag_stack[-2] == 'td':
@@ -205,13 +212,13 @@ class ScriptInfo:
         
 
 
-class WatchList:
+class WatchList: # {{{1
 
     def __init__(self):
         self.scripts = {}
 
     def __iter__(self):
-        return self.scripts.itervalues()
+        return iter(self.scripts.values())
 
     def __getitem__(self, key):
         return self.scripts[key]
@@ -221,26 +228,26 @@ class WatchList:
 
 
     def read(self, source):
-        if type(source) == file:
+        if isinstance(source, io.TextIOBase):
             for line in source:
                 script = ScriptInfo(line)
                 if script.sid:
                     self.scripts[script.sid] = script
                 else:
-                    print 'warning! skipping line:', line
+                    print('warning! skipping line:', line)
         else:
             raise Exception('WatchList.read(): unknown source type')
 
 
     def write(self, dest):
-        if type(dest) == file:
-            for script in self.scripts.itervalues():
+        if isinstance(dest, io.TextIOBase):
+            for script in self.scripts.values():
                 dest.write(script.to_string() + '\n')
         else:
             raise Exception('WatchList.write(): unknown destination type')
 
 
-class VimBall:
+class VimBall: # {{{1
 
     def __init__(self, filepath, tmpdir, prefix=None):
         """convert file to vimball using temporary directory"""
@@ -263,14 +270,14 @@ class VimBall:
         if filelower.endswith('.gz'):
             f = gzip.open(filepath)
             filepath = filepath[:-3]
-            f2 = file(filepath, 'w')
+            f2 = open(filepath, 'w')
             f2.write(f.read())
             f.close()
             f2.close()
         elif filelower.endswith('.bz2'):
             f = bz2.BZ2File(filepath)
             filepath = filepath[:-4]
-            f2 = file(filepath, 'w')
+            f2 = open(filepath, 'w')
             f2.write(f.read())
             f.close()
             f2.close()
@@ -304,8 +311,8 @@ class VimBall:
 
         # create file list
         listpath = os.path.join(tmpdir.path, 'vbalist.txt')
-        f = file(listpath, 'w')
-        f.writelines(map(lambda s: s + '\n', self.findfiles(vbadir)))
+        f = open(listpath, 'w')
+        f.writelines([s + '\n' for s in self.findfiles(vbadir)])
         f.close()
 
         # create vimball
@@ -338,19 +345,19 @@ class VimBall:
             raise Exception('cannot install vimball %s' % self.vbapath)
 
 
-def confirm(question):
+def confirm(question): # {{{1
     """Return true if the answer is 'y'"""
 
     ans = 'x'
     while not ans in ['y', 'yes', 'n', 'no']:
-        ans = raw_input(question + ' [y/n] ')
+        ans = input(question + ' [y/n] ')
 
     return ans.lower() in ['y', 'yes']
 
 
 
-def usage():
-	print """usage: %s watch-list [...]
+def usage(): # {{{1
+	print("""usage: %s watch-list [...]
 
 	where watchlist is a file containing one or more lines with the following
 	syntax:
@@ -362,11 +369,11 @@ def usage():
 	    42
 	    1259|colors
 	    3096|plugin
-	    3108"""  % (os.path.basename(sys.argv[0]))
+	    3108"""  % (os.path.basename(sys.argv[0])))
 
 
 
-if __name__ == '__main__':
+if __name__ == '__main__': # {{{1
 
     if len(sys.argv) < 2:
         usage()
@@ -380,7 +387,7 @@ if __name__ == '__main__':
         global tmpdir
         del tmpdir
 
-    sys.exitfunc = on_exit
+    atexit.register(on_exit)
 
 
     try:
@@ -389,7 +396,7 @@ if __name__ == '__main__':
             watchlist = WatchList()
 
             # read watch-list
-            watchlist.read(file(filename))
+            watchlist.read(open(filename))
 
             for script in watchlist:
 
@@ -400,8 +407,8 @@ if __name__ == '__main__':
 
                     if new_script.src_id != script.src_id:
 
-                        print '%s updated from version %s to %s on %s' % (new_script.filename, script.version,
-                                new_script.version, new_script.date)
+                        print('%s updated from version %s to %s on %s' % (new_script.filename, script.version,
+                                new_script.version, new_script.date))
 
                         if not confirm('download and install %s?' % new_script.filename):
                             continue
@@ -414,22 +421,23 @@ if __name__ == '__main__':
                         
                         # commit to watch-list
                         watchlist[new_script.sid] = new_script
-                        f = file(filename, 'w')
+                        f = open(filename, 'w')
                         watchlist.write(f)
                         f.close()
 
                     else:
-                        print '%s is already up-to-date' % new_script.filename
+                        print('%s is already up-to-date' % new_script.filename)
 
 
                 except HTMLParseError as e:
-                    print 'Error update script information for %s (%d)' % (script.filename, script.sid)
-                except Exception as e:
-                    print e
+                    print('Error update script information for %s (%d)' % (script.filename, script.sid))
+                #except Exception as e:
+                #    print(e)
 
     except KeyboardInterrupt:
-        print '\ninterrupted by user'
+        print('\ninterrupted by user')
 
     sys.exit(0)
 
 
+# vim:fdm=marker
