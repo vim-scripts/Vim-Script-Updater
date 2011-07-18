@@ -2,7 +2,7 @@
 
 ##############################################################################
 #
-# Vim Script Updater 1.0
+# Vim Script Updater 1.0.1
 #
 # Author: David Munger
 #
@@ -270,14 +270,14 @@ class VimBall: # {{{1
         if filelower.endswith('.gz'):
             f = gzip.open(filepath)
             filepath = filepath[:-3]
-            f2 = open(filepath, 'w')
+            f2 = open(filepath, 'wb')
             f2.write(f.read())
             f.close()
             f2.close()
         elif filelower.endswith('.bz2'):
             f = bz2.BZ2File(filepath)
             filepath = filepath[:-4]
-            f2 = open(filepath, 'w')
+            f2 = open(filepath, 'wb')
             f2.write(f.read())
             f.close()
             f2.close()
