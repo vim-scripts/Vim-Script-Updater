@@ -2,7 +2,7 @@
 
 ##############################################################################
 #
-# Vim Script Updater 1.0.1
+# Vim Script Updater 1.0.2
 #
 # Author: David Munger
 #
@@ -252,15 +252,15 @@ class VimBall: # {{{1
     def __init__(self, filepath, tmpdir, prefix=None):
         """convert file to vimball using temporary directory"""
 
-        self.scriptname = re.sub('\.(tar\.gz|tar\.bz2|tgz|zip|gz|bz2|vba|vim)$', '',
+        self.scriptname = re.sub('\.(tar\.gz|tar\.bz2|tgz|zip|gz|bz2|vmb|vba|vim)$', '',
                 os.path.basename(filepath))
 
         filepath = self._uncompress(filepath)
 
-        if filepath.lower().endswith('.vba'):
-            self.vbapath = filepath
+        if filepath.lower().endswith('.vmb') or filepath.lower().endswith('.vba'):
+            self.vimballpath = filepath
         else:
-            self._create_vba(filepath, tmpdir, prefix)
+            self._create_vmb(filepath, tmpdir, prefix)
 
 
     def _uncompress(self, filepath):
@@ -285,13 +285,13 @@ class VimBall: # {{{1
         return filepath
 
 
-    def _create_vba(self, filepath, tmpdir, prefix=None):
+    def _create_vmb(self, filepath, tmpdir, prefix=None):
 
-        vbadir = tmpdir.mktmpdir()
-        dstdir = vbadir
+        vmbdir = tmpdir.mktmpdir()
+        dstdir = vmbdir
 
         if prefix:
-            dstdir = os.path.join(vbadir, prefix)
+            dstdir = os.path.join(vmbdir, prefix)
             os.makedirs(dstdir)
 
         filelower = filepath.lower()
@@ -310,16 +310,16 @@ class VimBall: # {{{1
             shutil.move(filepath, filepath2)
 
         # create file list
-        listpath = os.path.join(tmpdir.path, 'vbalist.txt')
+        listpath = os.path.join(tmpdir.path, 'vmblist.txt')
         f = open(listpath, 'w')
-        f.writelines([s + '\n' for s in self.findfiles(vbadir)])
+        f.writelines([s + '\n' for s in self.findfiles(vmbdir)])
         f.close()
 
         # create vimball
-        self.vbapath = os.path.join(tmpdir.path, self.scriptname + '.vba')
-        status = os.system("%s -e -c '%%MkVimball! %s %s' -c 'qa!' %s" % (VIM, self.vbapath, vbadir, listpath))
+        self.vimballpath = os.path.join(tmpdir.path, self.scriptname + '.vmb')
+        status = os.system("%s -e -c '%%MkVimball! %s %s' -c 'qa!' %s" % (VIM, self.vimballpath, vmbdir, listpath))
         if status:
-            raise Exception('cannot create vimball %s' % self.vbapath)
+            raise Exception('cannot create vimball %s' % self.vimballpath)
 
 
     def findfiles(self, basedir, reldir=''):
@@ -340,9 +340,10 @@ class VimBall: # {{{1
         return files
 
     def install(self):
-        status = os.system("%s -e '%s' -c 'so %%' -c 'qa!'" % (VIM, self.vbapath))
+        status = os.system("%s -e '%s' -c 'so %%' -c 'qa!'" % (VIM,
+            self.vimballpath))
         if status:
-            raise Exception('cannot install vimball %s' % self.vbapath)
+            raise Exception('cannot install vimball %s' % self.vimballpath)
 
 
 def confirm(question): # {{{1
